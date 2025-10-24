@@ -19,5 +19,4 @@ COPY . .
 EXPOSE 8000
 
 # Define the command to run the application
-# This assumes your FastAPI app instance is named `app` in a file named `main.py`
 CMD ["pdm", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

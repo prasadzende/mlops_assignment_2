@@ -26,7 +26,6 @@ BASELINE_STATS = {
 class JsonFormatter(logging.Formatter):
     """Custom formatter to output log records as single-line JSON."""
     def format(self, record):
-        # Merge basic log data with extra data passed via 'extra' dict
         log_data = {
             "timestamp": self.formatTime(record),
             "level": record.levelname.lower(),
@@ -57,8 +56,6 @@ logger.addHandler(file_handler)
 
 logger.setLevel(logging.INFO)
 
-
-# --- Define Request/Response Schemas ---
 class IrisRequest(BaseModel):
     sepal_length: float = Field(..., example=5.1)
     sepal_width: float = Field(..., example=3.5)
@@ -119,7 +116,6 @@ async def predict(data: IrisRequest):
     request_id = str(int(start_time * 1000000)) # High resolution ID
 
     try:
-        # Convert request data to numpy array
         features = np.array([[
             data.sepal_length,
             data.sepal_width,
@@ -157,7 +153,7 @@ async def predict(data: IrisRequest):
             "input_stats": BASELINE_STATS 
         }
 
-        # Log the structured data
+
         logger.info("Inference successful.", extra={'log_data': log_data})
         
         return {
@@ -167,7 +163,6 @@ async def predict(data: IrisRequest):
         }
         
     except Exception as e:
-        # Error handling and logging
         end_time = time.time()
         latency_ms = round((end_time - start_time) * 1000, 2)
         

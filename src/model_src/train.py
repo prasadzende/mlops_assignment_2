@@ -26,7 +26,6 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    # Parse arguments
     args = parse_args()
     
     warnings.filterwarnings('ignore')
