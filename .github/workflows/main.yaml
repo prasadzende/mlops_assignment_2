@@ -54,12 +54,12 @@ jobs:
 
       - name: Stop and remove Docker container
         if: always()
-        working-directory: ./src/model_src
+        working-directory: ./
         run: make stop-docker
 
       - name: Push Docker image to Docker Hub
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        working-directory: ./src/model_src
+        working-directory: ./
         run: make push-docker
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
