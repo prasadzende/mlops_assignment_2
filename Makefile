@@ -89,13 +89,17 @@ test-endpoint:
 	"petal_length": 1.4, \
 	"petal_width": 0.2 \
 	}'); \
-	EXPECTED='{"status":"success","prediction":"setosa"}'; \
-	echo "Response: $$RESPONSE"; \
-	if [ "$$RESPONSE" = "$$EXPECTED" ]; then \
-		echo "✅ Test passed: Prediction is correct."; \
-	else \
-		echo "❌ Test failed: Unexpected response."; \
-		exit 1; \
+	EXPECTED='{"status":"success","prediction":"setosa"}'
+	echo "Response: $$RESPONSE"
+
+	# Extract status and prediction fields from RESPONSE ignoring probability
+	ACTUAL=$(echo "$$RESPONSE" | jq '{status, prediction}' | tr -d '\n')
+
+	if [ "$$ACTUAL" = "$$EXPECTED" ]; then
+		echo "✅ Test passed: Prediction is correct."
+	else
+		echo "❌ Test failed: Unexpected response."
+		exit 1
 	fi
 
 # Clean up generated files
