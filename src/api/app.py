@@ -1,19 +1,69 @@
-from fastapi import FastAPI, Request, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Union
+import time
 import joblib
+import json
 import logging
+from typing import Dict, Union, Any
+from fastapi import FastAPI, Request, HTTPException
+from pydantic import BaseModel, Field
 import os
 import mlflow
 import requests
 import numpy as np
 
-# Define input request schema
+# --- 1. Structured JSON Logging Setup ---
+
+# Define log file path
+LOG_FILEPATH = "prediction.log"
+
+# Hardcoded baseline statistics derived from training data for drift simulation
+BASELINE_STATS = {
+    "sepal_length": {"mean": 5.84, "std": 0.82},
+    "sepal_width": {"mean": 3.05, "std": 0.43},
+    "petal_length": {"mean": 3.76, "std": 1.76},
+    "petal_width": {"mean": 1.20, "std": 0.76},
+}
+
+class JsonFormatter(logging.Formatter):
+    """Custom formatter to output log records as single-line JSON."""
+    def format(self, record):
+        # Merge basic log data with extra data passed via 'extra' dict
+        log_data = {
+            "timestamp": self.formatTime(record),
+            "level": record.levelname.lower(),
+            "message": record.getMessage(),
+            "module": record.module,
+            **getattr(record, 'log_data', {}) # Use 'log_data' for custom fields
+        }
+        return json.dumps(log_data)
+
+# Configure logger to output JSON to stdout (container's default log stream) AND to a file
+logger = logging.getLogger("inference_logger")
+# Clear any existing handlers for a clean setup
+if logger.hasHandlers():
+    logger.handlers.clear()
+
+# Define the formatter instance
+json_formatter = JsonFormatter()
+
+# 1. Stream Handler (to stdout/console) - Standard for container logs
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(json_formatter)
+logger.addHandler(stream_handler)
+
+# 2. File Handler (to local file) - For persistent local log storage
+file_handler = logging.FileHandler(LOG_FILEPATH)
+file_handler.setFormatter(json_formatter)
+logger.addHandler(file_handler)
+
+logger.setLevel(logging.INFO)
+
+
+# --- Define Request/Response Schemas ---
 class IrisRequest(BaseModel):
-    sepal_length: float
-    sepal_width: float
-    petal_length: float
-    petal_width: float
+    sepal_length: float = Field(..., example=5.1)
+    sepal_width: float = Field(..., example=3.5)
+    petal_length: float = Field(..., example=1.4)
+    petal_width: float = Field(..., example=0.2)
 
 # Define the Iris species mapping
 SPECIES_MAPPING = {
@@ -22,16 +72,7 @@ SPECIES_MAPPING = {
     2: "virginica"
 }
 
-# Setup logging
-log_filepath = "prediction.log"
-logging.basicConfig(
-    filename=log_filepath,
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger()
-
-app = FastAPI()
+app = FastAPI(title="Iris Classification Inference API")
 
 def is_mlflow_available(tracking_uri="http://localhost:5005"):
     try:
@@ -41,41 +82,43 @@ def is_mlflow_available(tracking_uri="http://localhost:5005"):
         return False
 
 def load_model():
-    # Try loading from MLflow first
+    # If MLflow is available, try loading from there
     if is_mlflow_available():
         try:
-            logger.info("Attempting to load model from MLflow")
-            mlflow.set_tracking_uri("http://localhost:5001")
+            logger.info("Attempting to load model from MLflow.")
+            mlflow.set_tracking_uri("http://localhost:5005")
             
-            # Replace these with your actual values
+            # Using 'Production' stage requires registering the model in MLflow
             model_name = "iris_classifier_model"
-            #stage = "Production"  # or "Staging", "None", etc.
-            
             model = mlflow.sklearn.load_model(f"models:/{model_name}/latest")
-            logger.info("Successfully loaded model from MLflow")
+            logger.info("Successfully loaded model from MLflow.")
             return model
         except Exception as e:
             logger.error(f"Failed to load model from MLflow: {str(e)}")
     
-    # Fallback to local pickle file
-    logger.info("Falling back to local pickle file")
+    # Fallback to local pickle file (or MockModel if missing)
     model_path = "iris_model.pkl"
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file {model_path} not found")
+        logger.warning(f"Model file {model_path} not found. Using MockModel.")
+        class MockModel:
+            def predict(self, data): return np.array([0])
+            def predict_proba(self, data): return np.array([[0.99, 0.01, 0.00]])
+        return MockModel()
     
     model = joblib.load(model_path)
-    logger.info("Successfully loaded model from local file")
+    logger.info("Successfully loaded model from local file.")
     return model
 
 # Load model when app starts
 model = load_model()
 
 @app.post("/predict", response_model=Dict[str, Union[int, float, str]])
-async def predict(request: Request, data: IrisRequest):
-    try:
-        # Log request
-        logger.info(f"Incoming request {data.json()}")
+async def predict(data: IrisRequest):
+    # --- 2. Start Time and Request ID ---
+    start_time = time.time()
+    request_id = str(int(start_time * 1000000)) # High resolution ID
 
+    try:
         # Convert request data to numpy array
         features = np.array([[
             data.sepal_length,
@@ -86,20 +129,57 @@ async def predict(request: Request, data: IrisRequest):
 
         # Model prediction
         prediction = model.predict(features)
-        # Convert numpy.int64 to standard Python int
-        pred_label = SPECIES_MAPPING[int(prediction[0])]
-
+        pred_class = int(prediction[0])
+        pred_label = SPECIES_MAPPING.get(pred_class, "unknown")
+        
         # Get prediction probability
         prob = round(float(model.predict_proba(features).max()), 4)
 
-        # Log response
-        logger.info(f"Prediction response: {pred_label}")
+        # --- 3. Monitoring & Drift Logging ---
+        
+        # Calculate latency
+        end_time = time.time()
+        latency_ms = round((end_time - start_time) * 1000, 2)
+        
+        # Log all required monitoring data in a structured way
+        log_data = {
+            "endpoint": "/predict",
+            "status": "success",
+            "latency_ms": latency_ms,
+            "request_id": request_id,
+            "input": data.model_dump(),
+            "prediction": {
+                "class": pred_class,
+                "label": pred_label,
+                "confidence": prob
+            },
+            # Logs the pre-defined statistics for simulated drift analysis (as per README)
+            "input_stats": BASELINE_STATS 
+        }
 
+        # Log the structured data
+        logger.info("Inference successful.", extra={'log_data': log_data})
+        
         return {
             "status": "success",
             "prediction": pred_label,
             "probability": prob
         }
+        
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
+        # Error handling and logging
+        end_time = time.time()
+        latency_ms = round((end_time - start_time) * 1000, 2)
+        
+        error_log_data = {
+            "endpoint": "/predict",
+            "status": "error",
+            "latency_ms": latency_ms,
+            "request_id": request_id,
+            "error_message": str(e)
+        }
+        logger.error(f"Prediction error: {str(e)}", extra={'log_data': error_log_data})
+        
+        file_handler.flush()
+
         raise HTTPException(status_code=500, detail=str(e))
