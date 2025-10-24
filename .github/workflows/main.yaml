@@ -23,6 +23,7 @@ jobs:
       - name: Install dependencies and train model
         working-directory: ./
         run: |
+          sudo apt-get update && sudo apt-get install -y jq
           make setup
           make install
           make train-no-registration

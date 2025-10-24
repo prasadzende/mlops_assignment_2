@@ -89,6 +89,7 @@ test-endpoint:
 	"petal_length": 1.4, \
 	"petal_width": 0.2 \
 	}'); \
+	
 	EXPECTED='{"status":"success","prediction":"setosa"}'
 	echo "Response: $$RESPONSE"
 
