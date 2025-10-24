@@ -2,6 +2,20 @@
 
 Github Link: https://github.com/prasadzende/mlops_assignment_2
 
+## Table of Contents
+
+* [Project Structure](#project-structure)
+
+* [1. Pipeline Design and Artifact Tracking](#1-pipeline-design-and-artifact-tracking)
+
+* [2. Containerized Inference API](#2-containerized-inference-api)
+
+* [3. Basic Monitoring and Logging](#3-basic-monitoring-and-logging)
+
+* [Scope and Production Scalability](#scope-and-production-scalability)
+
+* [Key Design Decisions and Trade-offs](#key-design-decisions-and-trade-offs)
+
 This repository contains the solution for the MLOps skill assignment. The goal was to productionize a simple ML classification model by implementing a basic CI/CD pipeline for training, artifact tracking, containerized inference API deployment, and basic monitoring/logging.
 
 The entire workflow is managed via a `Makefile` and automated through a GitHub Actions workflow for seamless execution and reproducibility.
