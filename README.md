@@ -37,7 +37,6 @@ MLOPS_ASSIGNMENT_2/
 │   └── model_src/
 │       └── train.py      # Original data scientist training script (modified for MLflow)
 ├── Makefile              # Commands for local execution (build, run, train, test)
-├── requirements.txt      # Python dependencies (generated via pdm export)
 └── README.md             # This document
 
 ```
@@ -56,9 +55,44 @@ The ML pipeline is implemented using a combination of a **`Makefile`** (for loca
 
 ### How to Run the Training Pipeline (Local)
 
-1. **Set up MLflow:** Ensure you have an MLflow tracking server running or configure the local path where MLflow will store run data (the default is a local `mlruns` folder).
+#### 1. Initial Setup and Dependencies
 
-2. **Execute the `train` target:** This runs `src/model_src/train.py`, which wraps the training logic with MLflow tracking.
+This project uses [PDM](https://pdm-project.org/en/latest/) for dependency management. Before proceeding, ensure your environment is set up and all required packages are installed using the following Makefile targets:
+
+- Run setup for environment creation (e.g., creating a virtual environment)
+```
+make setup
+```
+
+- Install all required Python packages
+```
+make install
+```
+
+#### 2. Set up the MLflow Tracking Server (Optional)
+
+If you want to view and register models via the MLflow UI, you must start the tracking server first. The server is defined in the `infra/Dockerfile` and runs on port `5005`.
+
+To build and run the MLflow server:
+
+- Navigate to the infrastructure directory
+```
+cd infra/
+```
+- Build the Docker image
+```
+docker build -t mlflow:latest .
+```
+- Run the container, mapping port 5005 (MLflow UI) to your host
+```
+docker run -d -p 5005:5000 mlflow:latest
+```
+
+The MLflow UI will be available at `http://localhost:5005`.
+
+#### 3. **Execute the `train` target:** (skip if mlflow server is not available)
+
+This runs `src/model_src/train.py`, which wraps the training logic with MLflow tracking.
 
 #### Primary command: Assumes MLflow Tracking Server is configured and supports model registration.
 
@@ -113,7 +147,13 @@ The trained model is deployed as a high-performance REST API using **FastAPI** a
 
 The Inference API uses the model artifact generated in the training step. For local simulation, we assume `iris_model.pkl` is available in the `src/api/` directory (or can be manually copied from the MLflow artifact store).
 
-#### 1. Build the Docker Image
+#### 1. Clone the repository
+```
+git clone https://github.com/prasadzende/mlops_assignment_2.git
+cd mlops_assignment_2
+```
+
+#### 2. Build the Docker Image
 
 To build the image, navigate to the src/api/ directory and execute the docker build command:
 ```
@@ -121,7 +161,7 @@ cd src/api/
 docker build -t iris-app:latest .
 ```
 
-#### 2. Run the Container
+#### 3. Run the Container
 This command starts the container and maps the internal port 8000 (used by FastAPI) to the host's port 8000.
 ```
 docker run -d -p 8000:8000 iris-app:latest
