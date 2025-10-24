@@ -1,0 +1,19 @@
+[project]
+name = "Aibidia"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Prasad Z", email = "prasadzende1997@gmail.com"},
+]
+dependencies = [
+    "scikit-learn",
+    "joblib>=1.5.2",
+    "mlflow==3.1.1",
+]
+requires-python = "==3.11.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
